@@ -652,6 +652,7 @@ dependencies = [
  "http-body-util",
  "rusqlite",
  "serde",
+ "serde_json",
  "tokio",
  "tower",
 ]

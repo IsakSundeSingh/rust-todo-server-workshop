@@ -1,6 +1,6 @@
-#[derive(Debug, serde::Serialize)]
-pub(crate) struct Todo {
-    id: u32,
-    name: String,
-    completed: bool,
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
+pub struct Todo {
+    pub id: u32,
+    pub name: String,
+    pub completed: bool,
 }
