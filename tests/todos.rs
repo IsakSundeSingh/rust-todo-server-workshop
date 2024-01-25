@@ -75,7 +75,7 @@ mod part3 {
 
         let response = app.oneshot(post_todo_request(todo)).await.unwrap();
 
-        assert_eq!(response.status(), StatusCode::OK);
+        assert_eq!(response.status(), StatusCode::CREATED);
     }
 
     #[tokio::test]
