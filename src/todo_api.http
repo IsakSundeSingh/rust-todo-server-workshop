@@ -1,0 +1,35 @@
+@base=https://localhost:8080
+
+### Create a new todo
+
+POST {{base}}/todos
+Content-Type: application/json
+
+{
+  "id": "{{$guid}}",
+  "name":"Pick up groceries",
+  "is_complete":false
+}
+
+### Get todos
+
+GET {{base}}/todos
+
+### Get specific todo
+
+GET {{base}}/todos/1
+
+### Update todo
+
+PUT {{base}}/todos/1
+Content-Type: application/json
+
+{
+  "id": 1,
+  "name":"walk dog",
+  "is_complete": true
+}
+
+### Delete todo
+
+DELETE {{base}}/todos/1
