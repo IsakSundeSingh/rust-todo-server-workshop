@@ -649,7 +649,9 @@ name = "todo-server-workshop"
 version = "0.1.0"
 dependencies = [
  "axum",
+ "http-body-util",
  "rusqlite",
+ "serde",
  "tokio",
  "tower",
 ]
