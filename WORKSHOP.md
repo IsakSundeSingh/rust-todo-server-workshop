@@ -288,3 +288,67 @@ Router::new()
 ```
 
 </details>
+
+### 6. Update a todo
+
+Add an endpoint that accepts an update to a specific todo's text/name and completion status, using `PUT /todos/:id`. The endpoint should accept a todo as JSON-encoded input and return 200 on success, and 400 on error.
+
+💡 Tip: Remember the update struct-syntax: `Todo { new_value: something, ..old_todo }`
+
+<details>
+<summary>Solution</summary>
+
+Add a handler with the following signature:
+
+```rust
+async fn update_todo(
+    State(AppState(todos)): State<AppState>,
+    Json(updated_todo): Json<Todo>,
+) -> StatusCode
+```
+
+Now we just need to find the todo, update it, and return the correct status code:
+
+```rust
+let updated = todos
+    .write()
+    .await
+    .iter_mut()
+    // Find the todo
+    .find(|todo| todo.id == updated_todo.id)
+    // It's safe replacing the entire todo as the id is the same, but you could also use the update syntax `*todo = Todo { id: todo.id, ..updated_todo}`
+    .map(|todo| *todo = updated_todo);
+
+if updated.is_some() {
+    StatusCode::OK
+} else {
+    StatusCode::BAD_REQUEST
+}
+```
+
+Add it as a route:
+
+```rust
+Router::new()
+    // other routes
+    .route("/todos", put(update_todo))
+```
+
+And that's it!
+Also, note that you can merge routes that share the same path in a more terse way:
+
+```rust
+Router::new()
+    .route("/todos", get(todos).post(create_todo).put(update_todo))
+```
+
+Is the same as
+
+```rust
+Router::new()
+    .route("/todos", get(todos))
+    .route("/todos", post(create_todo))
+    .route("/todos", put(update_todo))
+```
+
+</details>

@@ -6,7 +6,7 @@ use axum::{
     extract::{Path, State},
     http::StatusCode,
     response::IntoResponse,
-    routing::{get, post},
+    routing::{get, post, put},
     Json, Router,
 };
 
@@ -60,6 +60,24 @@ async fn toggle(State(AppState(todos)): State<AppState>, Path(id): Path<u32>) ->
     }
 }
 
+async fn update_todo(
+    State(AppState(todos)): State<AppState>,
+    Json(updated_todo): Json<Todo>,
+) -> StatusCode {
+    let updated = todos
+        .write()
+        .await
+        .iter_mut()
+        .find(|todo| todo.id == updated_todo.id)
+        .map(|todo| *todo = updated_todo);
+
+    if updated.is_some() {
+        StatusCode::OK
+    } else {
+        StatusCode::BAD_REQUEST
+    }
+}
+
 #[derive(Clone)]
 struct AppState(Arc<RwLock<Vec<Todo>>>);
 pub fn app() -> Router {
@@ -68,6 +86,7 @@ pub fn app() -> Router {
         .route("/", get(empty))
         .route("/todos", get(todos))
         .route("/todos", post(create_todo))
+        .route("/todos", put(update_todo))
         .route("/todos/:id", get(get_todo))
         .route("/toggle/:id", post(toggle))
         .with_state(app_state)

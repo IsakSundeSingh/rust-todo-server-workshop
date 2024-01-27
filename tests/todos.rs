@@ -248,3 +248,91 @@ mod part5 {
         assert_eq!(response.status(), StatusCode::BAD_REQUEST);
     }
 }
+
+mod part6 {
+    use super::*;
+
+    #[tokio::test]
+    async fn updating_a_todo_works_correctly() {
+        let mut app = app();
+
+        let todo = default_todo();
+
+        // Create todo
+        let response = ServiceExt::<Request<Body>>::ready(&mut app)
+            .await
+            .unwrap()
+            .call(post_todo_request(todo.clone()))
+            .await
+            .unwrap();
+
+        assert!(response.status().is_success());
+
+        let updated = Todo {
+            name: "Wow, it works!".into(),
+            completed: true,
+            ..todo
+        };
+
+        // Toggle the todo
+        let response = ServiceExt::<Request<Body>>::ready(&mut app)
+            .await
+            .unwrap()
+            .call(
+                Request::builder()
+                    .uri("/todos")
+                    .method(axum::http::Method::PUT)
+                    .header(
+                        axum::http::header::CONTENT_TYPE,
+                        "application/json; charset=utf-8",
+                    )
+                    .body(Body::from(serde_json::to_string(&updated).unwrap()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert!(response.status().is_success());
+
+        // Fetch the todo and assert it worked
+        let response = ServiceExt::<Request<Body>>::ready(&mut app)
+            .await
+            .unwrap()
+            .call(
+                Request::builder()
+                    .uri("/todos/1")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert!(response.status().is_success());
+
+        let body = response.into_body().collect().await.unwrap().to_bytes();
+
+        assert_eq!(serde_json::from_slice::<Todo>(&body).unwrap(), updated);
+    }
+
+    #[tokio::test]
+    async fn updating_nonexisting_todo_returns_400() {
+        let app = app();
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .uri("/todos")
+                    .method(axum::http::Method::PUT)
+                    .header(
+                        axum::http::header::CONTENT_TYPE,
+                        "application/json; charset=utf-8",
+                    )
+                    .body(Body::from(serde_json::to_string(&default_todo()).unwrap()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    }
+}
