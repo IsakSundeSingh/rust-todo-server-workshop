@@ -185,3 +185,61 @@ async fn todos(State(AppState(todos)): State<AppState>) -> Json<Vec<Todo>> {
 And that's it!
 
 </details>
+
+### 4 Fetching a specific todo
+
+Add an endpoint that fetches a specific todo. Make sure to return 400 on nonexisting todos. The endpoint should be on the form `/todos/123` for the todo with id 123
+
+💡 Tip: Handlers can return results, returning different things upon success or errors
+
+<details>
+<summary>Solution</summary>
+
+Add a handler which extracts a reference to the shared state, and also a path to extract the id:
+
+```rust
+async fn get_todo(
+    State(AppState(todos)): State<AppState>,
+    Path(id): Path<u32>,
+)
+```
+
+On success, we want to return the JSON-encoded todo, but on failure we want to return 400 Bad request (it may not be exactly the best return code, but let's forget about that for a while). Change the signature to add a return type:
+
+```rust
+async fn get_todo(
+    State(AppState(todos)): State<AppState>,
+    Path(id): Path<u32>,
+) -> Result<Json<Todo>, StatusCode>
+```
+
+In the body, we want to get a reader lock to the todos and find the specific todo. If we don't find a todo, map it to a result with the error as a status-code and the ok value as a JSON-encoded todo. It can actually be done as a one-liner like this:
+
+```rust
+todos
+    // Get reader-lock future
+    .read()
+    // Await it, while not blocking the thread
+    .await
+    // Create an iterator over the todos, returns references
+    .iter()
+    // Find the specific id
+    .find(|todo| todo.id == id)
+    // Convert from an Option<&T> to Option<T> by cloning it
+    .cloned()
+    // Map the option to a result where the error value is a status code
+    .ok_or(StatusCode::BAD_REQUEST)
+    // Wrap the Ok-value in the Json-constructor
+    .map(Json)
+```
+
+Add the handler as a route, using `:id` to signify a path variable:
+
+```rust
+Router::new()
+    // other routes
+    .route("/todos/:id", get(get_todo))
+    .with_state(app_state)
+```
+
+</details>

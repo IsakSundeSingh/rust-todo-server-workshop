@@ -3,7 +3,7 @@
 use std::{borrow::BorrowMut, sync::Arc};
 
 use axum::{
-    extract::State,
+    extract::{Path, State},
     http::StatusCode,
     response::IntoResponse,
     routing::{get, post},
@@ -31,6 +31,20 @@ async fn create_todo(
     StatusCode::CREATED
 }
 
+async fn get_todo(
+    State(AppState(todos)): State<AppState>,
+    Path(id): Path<u32>,
+) -> Result<Json<Todo>, StatusCode> {
+    todos
+        .read()
+        .await
+        .iter()
+        .find(|todo| todo.id == id)
+        .cloned()
+        .ok_or(StatusCode::BAD_REQUEST)
+        .map(Json)
+}
+
 #[derive(Clone)]
 struct AppState(Arc<RwLock<Vec<Todo>>>);
 pub fn app() -> Router {
@@ -39,5 +53,6 @@ pub fn app() -> Router {
         .route("/", get(empty))
         .route("/todos", get(todos))
         .route("/todos", post(create_todo))
+        .route("/todos/:id", get(get_todo))
         .with_state(app_state)
 }

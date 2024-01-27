@@ -3,8 +3,8 @@ use axum::{
     http::{Request, StatusCode},
 };
 use http_body_util::BodyExt;
-use todo_server_workshop::app;
-use tower::ServiceExt;
+use todo_server_workshop::{app, Todo};
+use tower::{Service, ServiceExt};
 
 mod part1 {
     use super::*;
@@ -29,6 +29,18 @@ fn get_todos_request() -> Request<Body> {
         .unwrap()
 }
 
+fn post_todo_request(todo: Todo) -> Request<Body> {
+    Request::builder()
+        .uri("/todos")
+        .method(axum::http::Method::POST)
+        .header(
+            axum::http::header::CONTENT_TYPE,
+            "application/json; charset=utf-8",
+        )
+        .body(Body::from(serde_json::to_string(&todo).unwrap()))
+        .unwrap()
+}
+
 mod part2 {
     use super::*;
 
@@ -46,22 +58,7 @@ mod part2 {
 }
 
 mod part3 {
-    use todo_server_workshop::Todo;
-    use tower::Service;
-
     use super::*;
-
-    fn post_todo_request(todo: Todo) -> Request<Body> {
-        Request::builder()
-            .uri("/todos")
-            .method(axum::http::Method::POST)
-            .header(
-                axum::http::header::CONTENT_TYPE,
-                "application/json; charset=utf-8",
-            )
-            .body(Body::from(serde_json::to_string(&todo).unwrap()))
-            .unwrap()
-    }
 
     #[tokio::test]
     async fn returns_201_created_on_new_todo() {
@@ -112,5 +109,66 @@ mod part3 {
             serde_json::from_slice::<Vec<Todo>>(&body).unwrap(),
             vec![todo]
         );
+    }
+}
+
+mod part4 {
+    use super::*;
+
+    #[tokio::test]
+    async fn can_get_specific_todo() {
+        let mut app = app();
+
+        let todo = todo_server_workshop::Todo {
+            id: 1,
+            name: "Remember to store the todo".into(),
+            completed: false,
+        };
+
+        // Create todo
+        let response = ServiceExt::<Request<Body>>::ready(&mut app)
+            .await
+            .unwrap()
+            .call(post_todo_request(todo.clone()))
+            .await
+            .unwrap();
+
+        assert!(response.status().is_success());
+
+        // Fetch specific todo
+        let response = ServiceExt::<Request<Body>>::ready(&mut app)
+            .await
+            .unwrap()
+            .call(
+                Request::builder()
+                    .uri("/todos/1")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert!(response.status().is_success());
+
+        let body = response.into_body().collect().await.unwrap().to_bytes();
+
+        assert_eq!(serde_json::from_slice::<Todo>(&body).unwrap(), todo);
+    }
+
+    #[tokio::test]
+    async fn fetching_nonexisting_todo_returns_400() {
+        let app = app();
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .uri("/todos/123")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
     }
 }
