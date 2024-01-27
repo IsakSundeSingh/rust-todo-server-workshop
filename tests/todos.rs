@@ -41,6 +41,14 @@ fn post_todo_request(todo: Todo) -> Request<Body> {
         .unwrap()
 }
 
+fn default_todo() -> Todo {
+    Todo {
+        id: 1,
+        name: "Remember to store the todo".into(),
+        completed: false,
+    }
+}
+
 mod part2 {
     use super::*;
 
@@ -64,11 +72,7 @@ mod part3 {
     async fn returns_201_created_on_new_todo() {
         let app = app();
 
-        let todo = todo_server_workshop::Todo {
-            id: 1,
-            name: "Remember to store the todo".into(),
-            completed: false,
-        };
+        let todo = default_todo();
 
         let response = app.oneshot(post_todo_request(todo)).await.unwrap();
 
@@ -79,11 +83,7 @@ mod part3 {
     async fn persists_a_todo() {
         let mut app = app();
 
-        let todo = todo_server_workshop::Todo {
-            id: 1,
-            name: "Remember to store the todo".into(),
-            completed: false,
-        };
+        let todo = default_todo();
 
         let response = ServiceExt::<Request<Body>>::ready(&mut app)
             .await
@@ -119,11 +119,7 @@ mod part4 {
     async fn can_get_specific_todo() {
         let mut app = app();
 
-        let todo = todo_server_workshop::Todo {
-            id: 1,
-            name: "Remember to store the todo".into(),
-            completed: false,
-        };
+        let todo = default_todo();
 
         // Create todo
         let response = ServiceExt::<Request<Body>>::ready(&mut app)
@@ -163,6 +159,86 @@ mod part4 {
             .oneshot(
                 Request::builder()
                     .uri("/todos/123")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    }
+}
+
+mod part5 {
+    use super::*;
+
+    #[tokio::test]
+    async fn can_toggle_todo() {
+        let mut app = app();
+
+        let todo = default_todo();
+
+        // Create todo
+        let response = ServiceExt::<Request<Body>>::ready(&mut app)
+            .await
+            .unwrap()
+            .call(post_todo_request(todo.clone()))
+            .await
+            .unwrap();
+
+        assert!(response.status().is_success());
+
+        // Toggle the todo
+        let response = ServiceExt::<Request<Body>>::ready(&mut app)
+            .await
+            .unwrap()
+            .call(
+                Request::builder()
+                    .uri("/toggle/1")
+                    .method(axum::http::Method::POST)
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert!(response.status().is_success());
+
+        // Fetch the todo and assert its completion status
+        let response = ServiceExt::<Request<Body>>::ready(&mut app)
+            .await
+            .unwrap()
+            .call(
+                Request::builder()
+                    .uri("/todos/1")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert!(response.status().is_success());
+
+        let body = response.into_body().collect().await.unwrap().to_bytes();
+
+        assert_eq!(
+            serde_json::from_slice::<Todo>(&body).unwrap(),
+            Todo {
+                completed: true,
+                ..todo
+            }
+        );
+    }
+
+    #[tokio::test]
+    async fn toggling_nonexisting_todo_returns_400() {
+        let app = app();
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .uri("/toggle/1")
+                    .method(axum::http::Method::POST)
                     .body(Body::empty())
                     .unwrap(),
             )

@@ -243,3 +243,48 @@ Router::new()
 ```
 
 </details>
+
+### 5. Toggling todos
+
+Add an endpoint that toggles the completion of a todo using `POST /toggle/:id` as the path and method. Return 400 on an invalid todo id and 200 with an empty body on success.
+
+<details>
+<summary>Solution</summary>
+
+Add an endpoint with the same arguments signature types as the previous, returning a `StatusCode`:
+
+```rust
+async fn toggle(State(AppState(todos)): State<AppState>, Path(id): Path<u32>) -> StatusCode
+```
+
+The body is similar to the previous, and can be mostly pipelined:
+
+```rust
+let toggled = todos
+    // Get a writer-lock
+    .write()
+    .await
+    // Iterate over the list mutably
+    .iter_mut()
+    // Find the specific todo
+    .find(|todo| todo.id == id)
+    // Toggle its completion state if found
+    .map(|todo| todo.completed = !todo.completed);
+
+// Return the appropriate status code
+if toggled.is_some() {
+    StatusCode::OK
+} else {
+    StatusCode::BAD_REQUEST
+}
+```
+
+And register the handler:
+
+```rust
+Router::new()
+    // other routes
+    .route("/toggle/:id", post(toggle))
+```
+
+</details>
