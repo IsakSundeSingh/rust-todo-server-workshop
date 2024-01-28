@@ -1,0 +1,5 @@
+CREATE TABLE IF NOT EXISTS todos (
+  id        INTEGER PRIMARY KEY NOT NULL,
+  name      TEXT NOT NULL,
+  completed BOOL NOT NULL
+);

@@ -11,7 +11,7 @@ mod part1 {
 
     #[tokio::test]
     async fn returns_empty_200_at_index() {
-        let app = app();
+        let app = app(":memory:".into()).await;
 
         let response = app
             .oneshot(Request::builder().uri("/").body(Body::empty()).unwrap())
@@ -54,7 +54,7 @@ mod part2 {
 
     #[tokio::test]
     async fn returns_empty_list_of_todos() {
-        let app = app();
+        let app = app(":memory:".into()).await;
 
         let response = app.oneshot(get_todos_request()).await.unwrap();
 
@@ -70,7 +70,7 @@ mod part3 {
 
     #[tokio::test]
     async fn returns_201_created_on_new_todo() {
-        let app = app();
+        let app = app(":memory:".into()).await;
 
         let todo = default_todo();
 
@@ -81,7 +81,7 @@ mod part3 {
 
     #[tokio::test]
     async fn persists_a_todo() {
-        let mut app = app();
+        let mut app = app(":memory:".into()).await;
 
         let todo = default_todo();
 
@@ -117,7 +117,7 @@ mod part4 {
 
     #[tokio::test]
     async fn can_get_specific_todo() {
-        let mut app = app();
+        let mut app = app(":memory:".into()).await;
 
         let todo = default_todo();
 
@@ -153,7 +153,7 @@ mod part4 {
 
     #[tokio::test]
     async fn fetching_nonexisting_todo_returns_400() {
-        let app = app();
+        let app = app(":memory:".into()).await;
 
         let response = app
             .oneshot(
@@ -174,7 +174,7 @@ mod part5 {
 
     #[tokio::test]
     async fn can_toggle_todo() {
-        let mut app = app();
+        let mut app = app(":memory:".into()).await;
 
         let todo = default_todo();
 
@@ -232,7 +232,7 @@ mod part5 {
 
     #[tokio::test]
     async fn toggling_nonexisting_todo_returns_400() {
-        let app = app();
+        let app = app(":memory:".into()).await;
 
         let response = app
             .oneshot(
@@ -254,7 +254,7 @@ mod part6 {
 
     #[tokio::test]
     async fn updating_a_todo_works_correctly() {
-        let mut app = app();
+        let mut app = app(":memory:".into()).await;
 
         let todo = default_todo();
 
@@ -316,7 +316,7 @@ mod part6 {
 
     #[tokio::test]
     async fn updating_nonexisting_todo_returns_400() {
-        let app = app();
+        let app = app(":memory:".into()).await;
 
         let response = app
             .oneshot(
@@ -334,5 +334,42 @@ mod part6 {
             .unwrap();
 
         assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    }
+}
+
+mod part7 {
+    use super::*;
+
+    #[tokio::test]
+    async fn persists_a_todo_in_db() {
+        let uuid = uuid::Uuid::new_v4();
+        let db_path = format!("tests/db/persists_a_todo_in_db_{uuid}.db");
+
+        // Create a todo
+        {
+            let app = app(db_path.clone()).await;
+
+            let todo = default_todo();
+
+            let response = app.oneshot(post_todo_request(todo.clone())).await.unwrap();
+
+            assert!(response.status().is_success());
+        }
+
+        // Running the server anew to check if the data still exists
+        {
+            let app = app(db_path).await;
+
+            let response = app.oneshot(get_todos_request()).await.unwrap();
+
+            assert!(response.status().is_success());
+
+            let body = response.into_body().collect().await.unwrap().to_bytes();
+
+            assert_eq!(
+                serde_json::from_slice::<Vec<Todo>>(&body).unwrap(),
+                vec![default_todo()]
+            );
+        }
     }
 }

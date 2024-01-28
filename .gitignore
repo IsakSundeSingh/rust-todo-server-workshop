@@ -1,1 +1,4 @@
 /target
+/tests/db
+!/tests/db/.gitkeep
+todo_server_workshop_db.db

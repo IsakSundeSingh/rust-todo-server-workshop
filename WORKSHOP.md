@@ -42,15 +42,18 @@ It needs to be async as Axum expects async handlers.
 Then you need to add the handler to the router in the `app`-function:
 
 ```rust
-pub fn app() -> Router {
+pub fn app(_db_path: String) -> Router {
     Router::new()
         .route("/", get(empty))
 }
 ```
 
+Ignore the `_db_path`-argument, it will be used later.
 Run your tests, that's it! Empty handlers implicitly return a successful status code.
 
 </details>
+
+---
 
 ### 2. List todos
 
@@ -78,6 +81,8 @@ Router::new()
 ```
 
 </details>
+
+---
 
 ### 3. Add a todo
 
@@ -186,6 +191,8 @@ And that's it!
 
 </details>
 
+---
+
 ### 4 Fetching a specific todo
 
 Add an endpoint that fetches a specific todo. Make sure to return 400 on nonexisting todos. The endpoint should be on the form `/todos/123` for the todo with id 123
@@ -244,6 +251,8 @@ Router::new()
 
 </details>
 
+---
+
 ### 5. Toggling todos
 
 Add an endpoint that toggles the completion of a todo using `POST /toggle/:id` as the path and method. Return 400 on an invalid todo id and 200 with an empty body on success.
@@ -288,6 +297,8 @@ Router::new()
 ```
 
 </details>
+
+---
 
 ### 6. Update a todo
 
@@ -352,3 +363,182 @@ Router::new()
 ```
 
 </details>
+
+---
+
+### 7. Database persistence
+
+This is a big one (🍕), not gonna lie.
+If you get stuck or just want a quick solution, use the provided database-layer functions in [`./src/solutions/db.rs`](./src/solutions/db.rs).
+
+Note, the following solutions are a quick way to get to the solution, but we do almost no error-handling and is **not** how you would do it in a professional setting. Error-handling is left as an exercise to the reader 😅
+
+### 7.1 Stop "persisting" stuff in the memory
+
+Storing the todos in memory makes the server useless if restarted.
+We'll use [rusqlite](https://docs.rs/rusqlite/) as a database library, which provides an easy to use SQLite API. However, since it is not designed to be used in an async setting, we'll use the async wrapper created by Tokio: [`tokio-rusqlite`](https://docs.rs/tokio-rusqlite/)
+
+1. Start by replacing your `Arc<RwLock<Vec<Todo>>>` in the app-state with a connection to a database from `tokio-rusqlite`. A `Connection` is cloneable in itself, so maybe you don't need all that locking?
+
+2. Create a connection to the database in the `app`-function, using the provided path. Use the provided `solutions::db::create_todos_table`, or if you _really_ want to, create your own, to create the todos table before the server starts.
+
+3. Use the connection as a shared state throughout your program.
+
+<details>
+<summary>Solution</summary>
+
+**1. Replacing the shared state**
+
+This one is simple, just apply this diff:
+
+```diff
+-struct AppState(Arc<RwLock<Vec<Todo>>>);
++struct AppState(Connection);
+```
+
+It will work because the connection itself is `Clone`, which is what Axum does when sharing state between handlers. We could have used `Arc` here, but cloning the connection is cheap.
+
+**2. Create the database and table**
+
+Creating a database is simple, as using `Connection::open(path)` creates a database if it doesn't exist, by default:
+
+```rust
+pub async fn app(db_path: String) -> Router {
+    let connection = Connection::open(db_path).await.unwrap();
+
+    // Ensure table exists
+    db::create_todos_table(&connection).await;
+    // ...
+}
+```
+
+**3. Use the connection as a shared state**
+
+This is the easiest:
+
+```diff
+-    let app_state = AppState(Arc::new(RwLock::new(Vec::new())));
++    let app_state = AppState(connection);
+```
+
+Even the function signatures at the handler-site doesn't need to be changed, but this name-change is nice for readability:
+
+```diff
+-async fn toggle(State(AppState(todos)): State<AppState>, Path(id): Path<u32>) -> StatusCode {
++async fn toggle(State(AppState(connection)): State<AppState>, Path(id): Path<u32>) -> StatusCode {
+```
+
+Of course, we'll need to change the usages, but onwards. Unfortunately, there aren't any tests for the steps within this part of the workshop.
+
+</details>
+
+### 7.2 Create the db-layer functions
+
+You can, and I sort of want you to, skip this step. It's just fiddly, takes time, is error-prone, but trying from A to Z teaches you a lot!
+
+_If you want to skip this part, just go to the next part and use `solutions::db` instead of `db`._
+
+Create the following helper-methods with the following signatures (if you want it to work the same way as the workshop):
+
+- `async fn create_todos_table(connection: &Connection)`: Runs the [`create_todo_table.sql`](./src/solutions/create_todo_table.sql)-statement to create the `todos`-table
+- `async fn insert_todo(connection: &Connection, todo: Todo)` - Inserts a todo into the table (accept a id, don't worry about generating an id)
+- `async fn get_todo(connection: &Connection, id: u32) -> Option<Todo>` - Selects a todo and returns a single todo from the db
+- `async fn get_todos(connection: &Connection) -> Vec<Todo>` - Returns all todos from the db as a vector
+- `async fn update_todo(connection: &Connection, updated: Todo) -> Result<(), ()>` - Updates a todo in the database, can be used both for the `POST /toggle/:id`-endpoint and the `PUT /todos`-endpoint
+
+<details>
+<summary>Solution</summary>
+
+Just look at the solutions-file, please. The error-handling is really bad, and at some places I unwrap, while at others I return an error. I know.
+
+If you want to create your own methods, add the file `src/db.rs` and add `mod db;` to `lib.rs`.
+
+</details>
+
+### 7.3 Update the handlers
+
+Now, use all the methods you added for the db-layer and update the handlers to all interact with the database.
+
+💡 Tip: You can essentially remove all the locking-stuff now
+
+<details>
+<summary>Solution</summary>
+
+Update each handler to use the db-functions from before.
+
+**Note**: If you skipped the previous step, add the following to the `lib.rs`-module to use the provided db-methods: `use solutions::db;`.
+
+The following is the body of each handler after the update:
+
+`todos`:
+
+```rust
+let todos = db::get_todos(&connection).await;
+Json(todos)
+```
+
+`create_todo`:
+
+```rust
+db::insert_todo(&connection, todo).await;
+StatusCode::CREATED
+```
+
+`get_todo`:
+
+```rust
+let todo = db::get_todo(&connection, id).await;
+todo.ok_or(StatusCode::BAD_REQUEST).map(Json)
+```
+
+`toggle`:
+
+```rust
+// Since we don't have the todos in memory anymore,
+// let's fetch the existing todo from the db and then reinsert it
+// And yes, a SQL statement to do this in-db would probably be better, but I didn't want to figure out how to toggle a boolean with SQL in SQLite
+let maybe_todo = db::get_todo(&connection, id).await;
+
+if let Some(todo) = maybe_todo {
+    let toggled = db::update_todo(
+        &connection,
+        Todo {
+            completed: !todo.completed,
+            ..todo
+        },
+    )
+    .await;
+
+    if toggled.is_ok() {
+        StatusCode::OK
+    } else {
+        StatusCode::BAD_REQUEST
+    }
+} else {
+    StatusCode::BAD_REQUEST
+}
+```
+
+`update_todo`:
+
+```rust
+let updated = db::update_todo(&connection, updated_todo).await;
+
+if updated.is_ok() {
+    StatusCode::OK
+} else {
+    StatusCode::BAD_REQUEST
+}
+```
+
+And that's it! Run `cargo test` to run all tests and see that they pass, which they hopefully should!
+
+</details>
+
+## Conclusion
+
+Hopefully you have gained some insight into how easy it is to get started with servers in Rust. Sometimes even easier than other languages. The database-step is probably the worst, but so is it in most other languages, too.
+
+If you'd like, you can check out the [`tests/todos.rs`](./tests/todos.rs)-file to see how each test is done, too. Testing in Axum is surprisingly easy.
+
+Hope you had fun! 😃
