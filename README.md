@@ -19,7 +19,7 @@ At the end, you'll have the following:
   - `GET /todos/:id` - returns a specific todo
   - `POST /todos` - Add a new todo, where the todo is a JSON-encoded body
   - `POST /toggle/:id` - Toggle a todo id to complete/uncomplete the todo. Each todo has a unique id
-  - `PUT /todos/:id` - Update a todo with new information
+  - `PUT /todos` - Update a todo with new information
 - Todos are persisted between server runs
 - Persistence is done with SQLite
 
@@ -302,7 +302,7 @@ Router::new()
 
 ### 6. Update a todo
 
-Add an endpoint that accepts an update to a specific todo's text/name and completion status, using `PUT /todos/:id`. The endpoint should accept a todo as JSON-encoded input and return 200 on success, and 400 on error.
+Add an endpoint that accepts an update to a specific todo's text/name and completion status, using `PUT /todos`. The endpoint should accept a todo as JSON-encoded input and return 200 on success, and 400 on error.
 
 💡 Tip: Remember the update struct-syntax: `Todo { new_value: something, ..old_todo }`
 
