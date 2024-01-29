@@ -20,7 +20,7 @@ GET {{base}}/todos/1
 
 ### Update todo
 
-PUT {{base}}/todos/1
+PUT {{base}}/todos
 Content-Type: application/json
 
 {
