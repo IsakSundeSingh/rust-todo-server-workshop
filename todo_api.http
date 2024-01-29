@@ -6,13 +6,12 @@ POST {{base}}/todos
 Content-Type: application/json
 
 {
-  "id": "{{$guid}}",
+  "id": "1",
   "name":"Pick up groceries",
-  "is_complete":false
+  "completed":false
 }
 
 ### Get todos
-
 GET {{base}}/todos
 
 ### Get specific todo
@@ -27,9 +26,9 @@ Content-Type: application/json
 {
   "id": 1,
   "name":"walk dog",
-  "is_complete": true
+  "completed": true
 }
 
-### Delete todo
+### Toggle todo
 
-DELETE {{base}}/todos/1
+POST {{base}}/toggle/1
