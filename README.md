@@ -19,7 +19,7 @@ At the end, you'll have the following:
   - `GET /todos/:id` - returns a specific todo
   - `POST /todos` - Add a new todo, where the todo is a JSON-encoded body
   - `POST /toggle/:id` - Toggle a todo id to complete/uncomplete the todo. Each todo has a unique id
-  - `PUT /toggle/:id` - Update a todo with new information
+  - `PUT /todos/:id` - Update a todo with new information
 - Todos are persisted between server runs
 - Persistence is done with SQLite
 
