@@ -31,6 +31,23 @@ paginate: true
 
 ---
 
+# Blocking vs non-blocking
+
+<style scoped>
+section {
+  font-size: 1.9em
+}
+</style>
+
+- In an asynchronous environment certain actions take more time than others, e.g. reading from a disk, sending and receiving a packet across half the world
+- Those actions may take a _lot_ longer time than other common actions (~ 100 billion times longer than an integer addition)
+- Threads can either do this action in a _blocking_ manner, waiting until the OS reports back that the packet is returned, or a non-blocking manner, which means it can periodically poll for new events (or be notified by the OS of new events), so it can perform other actions in the meantime.
+- `async/await` in common languages is just an implementation of that last behavior of non-blocking asynchronous code.
+- The main benefit of `async/await` is not performance, but allowing other work to be performed at the same time, such as if a thread _also_ renders some UI, a blocking action will freeze that UI, while a non-blocking allows it to render.
+- Notice there's not really a clear line between blocking and non-blocking
+
+---
+
 # Async in Rust vs async how you know it
 
 - Async in other languages such as JS and C# is straightforward
@@ -67,6 +84,15 @@ pub trait Future {
 - `Context` has `Waker` which `wake`s your task somehow
 - `Future`s are not started when spawned, unlike JS's `Promise` and C#'s `Task`
 - `let x = do_stuff();` where `x` is a `Future` does "nothing"
+- Ignore `Pin<T>` for now, it is an implementation detail but it essentially means that `T` cannot be _moved_ in memory while the value lives. The value is _pinned_ in place.
+
+---
+
+# `async fn` desugared
+
+- Writing converting `fn fun() -> Thing` to `async fn fun() -> Thing` converts the function so it doesn't actually return `Thing` anymore, but `impl Future<Output = Thing> + Sized + 'static`
+- The future-type cannot be explicitly named because it _may_ capture stack-local values, so we can only write `impl Future<...>`, similarly to closure's `impl Fn() -> Thing`
+- This is similar to how other languages does it, except Rust also tracks liveness, so it adds `'static` unless you really want a way around it.
 
 ---
 
@@ -161,27 +187,62 @@ fn main() -> smol::io::Result<()> {
 
 # Axum 101
 
+<style scoped>
+section {
+  font-size: 2.2em
+}
+</style>
+
 ```rust
 #[tokio::main]
 async fn main() {
     let app = Router::new()
         .route("/", get(root)) // `GET /` goes to `root`
-        .route("/users", post(create_user)); // `POST /users` goes to `create_user`
+        .route("/users", post(create_user)) // `POST /users` goes to `create_user`
         .with_state(app_state) // Can be database connection pool, etc.
 
     let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await.unwrap();
     axum::serve(listener, app).await.unwrap();
 }
-async fn root() -> &'static str {
-    "Hello, World!"
-}
+async fn root() -> &'static str { "Hello, World!" }
 async fn create_user(
     // Parse the request body as JSON into a `CreateUser` type
     Json(payload): Json<CreateUser>,
 ) -> (StatusCode, Json<User>) {
     // TODO: Application logic
-
     // this will be converted into a JSON response with a status code of `201 Created`
     (StatusCode::CREATED, Json(user))
 }
 ```
+
+---
+
+# Debugging Axum
+
+<style scoped>
+section {
+  font-size: 1.9em
+}
+</style>
+
+Unfortunately, fancy types and ergonomics leads to _worse_ compiler error messages, so the Axum team has added `axum::debug_handler`. Just add the macro onto your failing function and it may clarify the error message:
+
+```rust
+#[tokio::main]
+async fn main() {
+    let app = Router::new()
+        .route("/users", post(create_user))
+        .with_state(app_state)
+
+    let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await.unwrap();
+    axum::serve(listener, app).await.unwrap();
+}
+#[axum::debug_handler]
+async fn create_user(
+    MyFancySerializationLanguage(payload): MyFancySerializationLanguage<CreateUser>,
+) -> (StatusCode, Json<User>) {
+    (StatusCode::CREATED, Json(user))
+}
+```
+
+Will explain that you need to make an _extractor_ for your serialization language.
