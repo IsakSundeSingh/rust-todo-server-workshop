@@ -25,6 +25,8 @@ At the end, you'll have the following:
 
 ## Assignments
 
+Since this workshop has a few tests set up, it is easier to split the project up into a library and a binary, where having a library makes it more testable. The library part is `./src/lib.rs` and the binary is `./src/main.rs`, so you can just do your edits in the library to make tests pass.
+
 ### 1. Health check
 
 Add an endpoint that just returns the status code `200 OK` on the path `/`
