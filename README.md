@@ -16,9 +16,9 @@ At the end, you'll have the following:
 - A HTTP-webserver running locally on port 8080
 - The following endpoints
   - `GET /todos` - returns all todos
-  - `GET /todos/:id` - returns a specific todo
+  - `GET /todos/{id}` - returns a specific todo
   - `POST /todos` - Add a new todo, where the todo is a JSON-encoded body
-  - `POST /toggle/:id` - Toggle a todo id to complete/uncomplete the todo. Each todo has a unique id
+  - `POST /toggle/{id}` - Toggle a todo id to complete/uncomplete the todo. Each todo has a unique id
   - `PUT /todos` - Update a todo with new information
 - Todos are persisted between server runs
 - Persistence is done with SQLite
@@ -242,12 +242,12 @@ todos
     .map(Json)
 ```
 
-Add the handler as a route, using `:id` to signify a path variable:
+Add the handler as a route, using `{id}` to signify a path variable:
 
 ```rust
 Router::new()
     // other routes
-    .route("/todos/:id", get(get_todo))
+    .route("/todos/{id}", get(get_todo))
     .with_state(app_state)
 ```
 
@@ -257,7 +257,7 @@ Router::new()
 
 ### 5. Toggling todos
 
-Add an endpoint that toggles the completion of a todo using `POST /toggle/:id` as the path and method. Return 400 on an invalid todo id and 200 with an empty body on success.
+Add an endpoint that toggles the completion of a todo using `POST /toggle/{id}` as the path and method. Return 400 on an invalid todo id and 200 with an empty body on success.
 
 <details>
 <summary>Solution</summary>
@@ -295,7 +295,7 @@ And register the handler:
 ```rust
 Router::new()
     // other routes
-    .route("/toggle/:id", post(toggle))
+    .route("/toggle/{id}", post(toggle))
 ```
 
 </details>
@@ -446,7 +446,7 @@ Create the following helper-methods with the following signatures (if you want i
 - `async fn insert_todo(connection: &Connection, todo: Todo)` - Inserts a todo into the table (accept a id, don't worry about generating an id)
 - `async fn get_todo(connection: &Connection, id: u32) -> Option<Todo>` - Selects a todo and returns a single todo from the db
 - `async fn get_todos(connection: &Connection) -> Vec<Todo>` - Returns all todos from the db as a vector
-- `async fn update_todo(connection: &Connection, updated: Todo) -> Result<(), ()>` - Updates a todo in the database, can be used both for the `POST /toggle/:id`-endpoint and the `PUT /todos`-endpoint
+- `async fn update_todo(connection: &Connection, updated: Todo) -> Result<(), ()>` - Updates a todo in the database, can be used both for the `POST /toggle/{id}`-endpoint and the `PUT /todos`-endpoint
 
 <details>
 <summary>Solution</summary>
