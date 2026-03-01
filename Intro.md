@@ -9,7 +9,7 @@ paginate: true
                                GET /wassup HTTP/1.2
            ┌─────────────────┐ Host: www.example.com  ┌──────────────────┐
            │                 ├────────────────────────►                  │
-           │                 │ 200 OK wassup my dude  │                  │
+           │                 │ 200 OK Hello!          │                  │
            │                 ◄────────────────────────┤                  │
            │      Client     │                        │       Server     │
            │                 ├────────────────────────►                  │
@@ -26,7 +26,7 @@ paginate: true
 - Networking above transport layer is messy and changing
 - `reqwest` is a great client-library for sending HTTP-requests
 - `axum` is a great server-library for web-servers
-- `hyper` is a low-level HTTP-library, also used in Curl
+- `hyper` is a low-level HTTP-library, also used in Curl, although sadly not anymore
 - Networking is *async*hronous by nature
 
 ---
@@ -60,9 +60,9 @@ section {
 
 ---
 
-# Rust gotta go fast
+# Rust wants to go fast
 
-- Hidden costs is Rust's worst enemy. Goes directly against zero-cost abstractions, which is why Rust removed green threads just prior to 1.0 release
+- Hidden costs is Rust's worst enemy. Goes directly against zero-cost abstractions, which is why Rust removed lightweight green threads just prior to 1.0 release
 - `async`/`await` is built into the language, but with `.await`-postfix syntax for awaiting a value
 - `async fn a() -> Stuff` or `fn b() -> impl Future<Output = Stuff>`
 - `let x = my_func().await?.do_more().await?;`, providing better reading comprehension
@@ -71,6 +71,12 @@ section {
 ---
 
 # Futures, promises, tasks...
+
+<style scoped>
+section {
+  font-size: 2.2em
+}
+</style>
 
 ```rust
 pub trait Future {
@@ -90,7 +96,7 @@ pub trait Future {
 
 # `async fn` desugared
 
-- Writing converting `fn fun() -> Thing` to `async fn fun() -> Thing` converts the function so it doesn't actually return `Thing` anymore, but `impl Future<Output = Thing> + Sized + 'static`
+- Changing `fn fun() -> Thing` to `async fn fun() -> Thing` converts the function so it doesn't actually return `Thing` anymore, but `impl Future<Output = Thing> + Sized + 'static`
 - The future-type cannot be explicitly named because it _may_ capture stack-local values, so we can only write `impl Future<...>`, similarly to closure's `impl Fn() -> Thing`
 - This is similar to how other languages does it, except Rust also tracks liveness, so it adds `'static` unless you really want a way around it.
 
@@ -176,12 +182,12 @@ fn main() -> smol::io::Result<()> {
 
 # Axum, tower, tokio
 
-- Tokio tries to create an ecosystem and creates Tower
+- Tokio tries to create an ecosystem and created Tower
 - Tower is a layered HTTP library for services
   - Want to create a server? Implement `Service`
   - Want to create a middleware? Implement `Layer`
 - Axum is a webserver-library created on top of Tower
-- Uses some type-tricks for ergonomic and safe (tries to be crash-free) DevEx
+- Uses some type-tricks for ergonomic and safe (tries to be crash-free). Good DevEx
 
 ---
 
@@ -246,3 +252,109 @@ async fn create_user(
 ```
 
 Will explain that you need to make an _extractor_ for your serialization language.
+
+---
+
+# Axum middleware
+
+<style scoped>
+section {
+  font-size: 1.9em
+}
+</style>
+
+Uses Tower's services for support, any tower service is supported. Onion time 🧅
+
+```rust
+let app = Router::new()
+    .route("/", get(handler))
+    .layer(layer_one)
+    .layer(layer_two)
+    .layer(layer_three);
+```
+
+```
+        requests
+           v
++----- layer_three -----+
+| +---- layer_two ----+ |
+| | +-- layer_one --+ | |
+| | |               | | |
+| | |    handler    | | |
+| | |               | | |
+| | +-- layer_one --+ | |
+| +---- layer_two ----+ |
++----- layer_three -----+
+           v
+        responses
+```
+
+---
+
+## Axum extractors
+
+<style scoped>
+section {
+  font-size: 1.9em
+}
+</style>
+
+Extractors are a way for a handler in Axum to extract almost any data it wants. Either from a request in particular or from global state.
+
+```rust
+// `Path` gives you the path parameters and deserializes them.
+async fn path(Path(user_id): Path<u32>) {}
+
+// `Query` gives you the query parameters and deserializes them.
+async fn query(Query(params): Query<HashMap<String, String>>) {}
+
+// Buffer the request body and deserialize it as JSON into a
+// `serde_json::Value`. `Json` supports any type that implements
+// `serde::Deserialize`.
+async fn json(Json(payload): Json<serde_json::Value>) {}
+
+// Extractor could fetch auth token from header, authenticate
+// and perform authorization check before returning that
+// user's info to the handler, or returning an error to the caller.
+async fn some_restricted_resource(AdminUser(user_data): AdminUserExtractor) {}
+```
+
+---
+
+## Axum responses
+
+<style scoped>
+section {
+  font-size: 1.9em
+}
+</style>
+
+Anything that implements `IntoResponse` is a valid response value
+
+```rust
+async fn plain_text(uri: Uri) -> String { // String will get a `text/plain; charset=utf-8` content-type
+    format!("Hi from {}", uri.path())
+}
+async fn json() -> Json<Vec<String>> { // `Json` will get `application/json` content-type and work with anything that implements `serde::Serialize`
+    Json(vec!["foo".to_owned(), "bar".to_owned()])
+}
+async fn html() -> Html<&'static str> { // `Html` will get a `text/html` content-type
+    Html("<p>Hello, World!</p>")
+}
+// `StatusCode` gives an empty response with that status code
+async fn status() -> StatusCode { StatusCode::NOT_FOUND }
+
+// `HeaderMap` gives an empty response with some headers
+async fn headers() -> HeaderMap {
+    let mut headers = HeaderMap::new();
+    headers.insert(header::SERVER, "axum".parse().unwrap());
+    headers
+}
+
+async fn impl_trait() -> impl IntoResponse { // Use `impl IntoResponse` to avoid writing the whole type
+    [
+        (header::SERVER, "axum"),
+        (header::CONTENT_TYPE, "text/plain")
+    ]
+}
+```
